@@ -7,6 +7,7 @@
 #include <QDebug>
 #include <QScreen>
 #include <QWindow>
+#include <QPointer>
 #include "SARibbonQt5Compat.hpp"
 #include "SARibbonMainWindow.h"
 class SAPrivateFramelessWidgetData;
@@ -27,6 +28,8 @@ public:
     bool m_bWidgetResizable { true };
     bool m_bRubberBandOnResize { true };
     bool m_bRubberBandOnMove { true };
+    int m_titleHeight { 30 };
+    QPointer< QWidget > m_titleBarWidget;
 };
 
 SAFramelessHelper::PrivateData::PrivateData(SAFramelessHelper* p) : q_ptr(p)
@@ -59,11 +62,9 @@ public:
     bool mIsOnBottomRightEdge { true };
 
     static int s_borderWidth;
-    static int s_titleHeight;
 };
 
 int SAPrivateFramelessCursorPosCalculator::s_borderWidth = 5;
-int SAPrivateFramelessCursorPosCalculator::s_titleHeight = 30;
 
 /***** CursorPosCalculator *****/
 SAPrivateFramelessCursorPosCalculator::SAPrivateFramelessCursorPosCalculator()
@@ -168,6 +169,9 @@ private:
 
     // 处理鼠标双击事件
     bool handleDoubleClickedMouseEvent(QMouseEvent* event);
+
+    // Checks whether a global mouse position belongs to the title bar.
+    bool isInTitleBar(const QPoint& globalPos) const;
 
 private:
     SAFramelessHelper::PrivateData* d;
@@ -370,13 +374,9 @@ bool SAPrivateFramelessWidgetData::handleMousePressEvent(QMouseEvent* event)
     if (event->button() == Qt::LeftButton) {
         m_bLeftButtonPressed = true;
 
-        qreal dpiScale        = SAFramelessHelper::getScreenDpiScale(m_pWidget);
-        int scaledTitleHeight = SAPrivateFramelessCursorPosCalculator::s_titleHeight * dpiScale;
-        // 这里要用eventPosY获取相对位置
-        m_bLeftButtonTitlePressed = SA::compat::eventPosY(event) < scaledTitleHeight;
-
         QRect frameRect = m_pWidget->frameGeometry();
         auto gp         = SA::compat::eventGlobalPos(event);
+        m_bLeftButtonTitlePressed = isInTitleBar(gp);
         m_pressedMousePos.recalculate(gp, frameRect);
 
         m_ptDragPos = gp - frameRect.topLeft();
@@ -504,10 +504,7 @@ bool SAPrivateFramelessWidgetData::handleDoubleClickedMouseEvent(QMouseEvent* ev
                 if (mainwindow->windowFlags() & Qt::WindowMaximizeButtonHint) {
                     // 在最大化按钮显示时才进行shownormal处理
 
-                    // 修改后：考虑DPI缩放
-                    qreal dpiScale        = SAFramelessHelper::getScreenDpiScale(m_pWidget);
-                    int scaledTitleHeight = SAPrivateFramelessCursorPosCalculator::s_titleHeight * dpiScale;
-                    bool titlePressed     = SA::compat::eventPosY(event) < scaledTitleHeight;
+                    bool titlePressed = isInTitleBar(SA::compat::eventGlobalPos(event));
 
                     if (titlePressed) {
                         if (m_pWidget->isMaximized()) {
@@ -522,6 +519,35 @@ bool SAPrivateFramelessWidgetData::handleDoubleClickedMouseEvent(QMouseEvent* ev
         }
     }
     return (false);
+}
+
+/**
+ * \if ENGLISH
+ * @brief Checks whether a global mouse position belongs to the configured title bar.
+ * @param[in] globalPos Global mouse position.
+ * @return true if the position is in the title bar; otherwise false.
+ * @details The test is performed in the title bar widget's logical coordinate system to avoid DPI-dependent
+ * coordinate mismatches. If no title bar widget is configured, the top-level widget is used as a fallback.
+ * \endif
+ *
+ * \if CHINESE
+ * @brief 判断全局鼠标位置是否位于已配置的标题栏内。
+ * @param[in] globalPos 全局鼠标位置。
+ * @return 若位置位于标题栏内则返回 true，否则返回 false。
+ * @details 该判断在标题栏控件的逻辑坐标系中执行，以避免 DPI 相关的坐标不匹配。
+ * 未配置标题栏控件时，回退使用顶级窗口。
+ * \endif
+ */
+bool SAPrivateFramelessWidgetData::isInTitleBar(const QPoint& globalPos) const
+{
+    QWidget* titleBarWidget = d->m_titleBarWidget ? d->m_titleBarWidget.data() : m_pWidget;
+    if (!titleBarWidget) {
+        return false;
+    }
+
+    const QPoint localPos = titleBarWidget->mapFromGlobal(globalPos);
+    const QRect titleRect(0, 0, titleBarWidget->width(), d->m_titleHeight);
+    return titleRect.contains(localPos);
 }
 
 //===================================================
@@ -629,8 +655,42 @@ void SAFramelessHelper::setBorderWidth(int width)
 void SAFramelessHelper::setTitleHeight(int height)
 {
     if (height > 0) {
-        SAPrivateFramelessCursorPosCalculator::s_titleHeight = height;
+        d_ptr->m_titleHeight = height;
     }
+}
+
+/**
+ * \if ENGLISH
+ * @brief Sets the widget used for title bar hit testing.
+ * @param[in] widget Widget whose top title-height pixels form the title bar hit area.
+ * @details Mouse positions are mapped from global coordinates to this widget before testing.
+ * \endif
+ *
+ * \if CHINESE
+ * @brief 设置用于标题栏命中测试的控件。
+ * @param[in] widget 顶部标题栏高度像素构成标题栏命中区域的控件。
+ * @details 鼠标位置会先从全局坐标映射到此控件，再进行命中测试。
+ * \endif
+ */
+void SAFramelessHelper::setTitleBarWidget(QWidget* widget)
+{
+    d_ptr->m_titleBarWidget = widget;
+}
+
+/**
+ * \if ENGLISH
+ * @brief Returns the widget used for title bar hit testing.
+ * @return Widget used for title bar hit testing, or nullptr when the top-level widget is used.
+ * \endif
+ *
+ * \if CHINESE
+ * @brief 获取用于标题栏命中测试的控件。
+ * @return 用于标题栏命中测试的控件；未设置时返回 nullptr 并使用顶级窗口。
+ * \endif
+ */
+QWidget* SAFramelessHelper::titleBarWidget() const
+{
+    return d_ptr->m_titleBarWidget.data();
 }
 
 bool SAFramelessHelper::widgetMovable()
@@ -660,7 +720,7 @@ uint SAFramelessHelper::borderWidth()
 
 uint SAFramelessHelper::titleHeight()
 {
-    return (SAPrivateFramelessCursorPosCalculator::s_titleHeight);
+    return (d_ptr->m_titleHeight);
 }
 
 qreal SAFramelessHelper::getScreenDpiScale(const QWidget* widget)

@@ -3,8 +3,7 @@
 
 #include "SARibbonGlobal.h"
 #include <QObject>
-
-class QWidget;
+#include <QWidget>
 
 /**
  * @class SAFramelessHelper
@@ -25,6 +24,7 @@ class QWidget;
 class SA_RIBBON_EXPORT SAFramelessHelper : public QObject
 {
 	Q_OBJECT
+	Q_PROPERTY(QWidget* titleBarWidget READ titleBarWidget WRITE setTitleBarWidget)
 	SA_RIBBON_DECLARE_PRIVATE(SAFramelessHelper)
 	friend class SAPrivateFramelessWidgetData;
 
@@ -54,6 +54,12 @@ public:
 
 	// 设置标题栏高度
 	void setTitleHeight(int height);
+
+	// Sets the widget used for title bar hit testing.
+	void setTitleBarWidget(QWidget* widget);
+
+	// Returns the widget used for title bar hit testing.
+	QWidget* titleBarWidget() const;
 	bool widgetResizable();
 	bool widgetMovable();
 	bool rubberBandOnMove();

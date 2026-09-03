@@ -136,6 +136,9 @@ protected:
 private Q_SLOTS:
     /// Handle primary screen changed event
     void onPrimaryScreenChanged(QScreen* screen);
+
+    /// Synchronize the title bar height used by frame components.
+    void onRibbonTitleBarHeightChanged(int oldHeight, int newHeight);
 };
 
 /**

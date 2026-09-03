@@ -276,6 +276,11 @@ void SARibbonMainWindow::setRibbonBar(SARibbonBar* ribbon)
     QMainWindow::setMenuWidget(ribbon);
     ribbon->setMainWindowStyles(d_ptr->mRibbonMainWindowStyle);
     const int th = ribbon->titleBarHeight();
+    connect(ribbon,
+            &SARibbonBar::titleBarHeightChanged,
+            this,
+            &SARibbonMainWindow::onRibbonTitleBarHeightChanged,
+            Qt::UniqueConnection);
     // 先提升ribbon，避免被别的窗口覆盖
     ribbon->raise();
     if (d_ptr->isUseRibbonFrame()) {
@@ -291,7 +296,7 @@ void SARibbonMainWindow::setRibbonBar(SARibbonBar* ribbon)
 
         SARibbonSystemButtonBar* sysBar = d_ptr->mWindowButtonGroup;
         sysBar->setWindowStates(windowState());
-        sysBar->setWindowTitleHeight(th);
+        onRibbonTitleBarHeightChanged(th, th);
         // 确保sysbar在最顶层，避免第二次设置ribbonbar的时候，被ribbonbar覆盖了sysbar
         sysBar->raise();
         sysBar->show();
@@ -324,7 +329,7 @@ void SARibbonMainWindow::setRibbonBar(SARibbonBar* ribbon)
         // 捕获ribbonbar的事件
         ribbon->installEventFilter(this);
         // 设置窗体的标题栏高度
-        d_ptr->mFramelessHelper->setTitleHeight(th);
+        d_ptr->mFramelessHelper->setTitleBarWidget(ribbon);
         d_ptr->mFramelessHelper->setRubberBandOnResize(false);
 #endif
         // 最后要提升，否则新加入的会被覆盖
@@ -652,6 +657,36 @@ void SARibbonMainWindow::onPrimaryScreenChanged(QScreen* screen)
         qDebug() << "Primary Screen Changed";
         bar->updateRibbonGeometry();
     }
+}
+
+/**
+ * \if ENGLISH
+ * @brief Synchronizes the title bar height used by frame components.
+ * @param[in] oldHeight Previous title bar height.
+ * @param[in] newHeight Current title bar height.
+ * @details The system button bar and built-in frameless helper must use the same logical title bar height as
+ * the Ribbon to keep their geometry and hit testing aligned.
+ * \endif
+ *
+ * \if CHINESE
+ * @brief 同步边框组件使用的标题栏高度。
+ * @param[in] oldHeight 之前的标题栏高度。
+ * @param[in] newHeight 当前的标题栏高度。
+ * @details 系统按钮栏和内置无边框辅助类必须使用与 Ribbon 一致的逻辑标题栏高度，
+ * 以保持其几何布局和命中测试一致。
+ * \endif
+ */
+void SARibbonMainWindow::onRibbonTitleBarHeightChanged(int oldHeight, int newHeight)
+{
+    Q_UNUSED(oldHeight)
+    if (d_ptr->mWindowButtonGroup) {
+        d_ptr->mWindowButtonGroup->setWindowTitleHeight(newHeight);
+    }
+#if !SARIBBON_USE_3RDPARTY_FRAMELESSHELPER
+    if (d_ptr->mFramelessHelper) {
+        d_ptr->mFramelessHelper->setTitleHeight(newHeight);
+    }
+#endif
 }
 
 //----------------------------------------------------
