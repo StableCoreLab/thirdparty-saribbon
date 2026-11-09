@@ -1,4 +1,4 @@
-﻿@echo off
+@echo off
 setlocal
 
 rem Generate a Visual Studio 2022 solution for SARibbon with CMake.
@@ -31,18 +31,21 @@ if errorlevel 1 (
     exit /b 1
 )
 
-if defined QT_DIR (
-    if "%QT_DIR:~-1%"=="\" set "QT_DIR=%QT_DIR:~0,-1%"
-    if "%QT_DIR:~-1%"=="/" set "QT_DIR=%QT_DIR:~0,-1%"
-    if not exist "%QT_DIR%" (
-        echo [ERROR] Qt directory does not exist: "%QT_DIR%"
-        exit /b 1
-    )
-) else (
-    echo [ERROR] Qt path is not set.
-    echo [HINT] Set environment variable QT6_8_x64 or pass Qt path as the first argument.
-    exit /b 1
-)
+rem Do not put substring expansion of a variable inside a multi-line paren block:
+rem cmd mis-parses the closing paren when the value is empty. Use goto flow instead.
+if not defined QT_DIR goto :NoQtDir
+if "%QT_DIR:~-1%x"=="\x" set "QT_DIR=%QT_DIR:~0,-1%"
+if "%QT_DIR:~-1%x"=="/x" set "QT_DIR=%QT_DIR:~0,-1%"
+if exist "%QT_DIR%" goto :QtDirOk
+echo [ERROR] Qt directory does not exist: "%QT_DIR%"
+exit /b 1
+
+:NoQtDir
+echo [ERROR] Qt path is not set.
+echo [HINT] Set environment variable QT6_8_x64 or pass Qt path as the first argument.
+exit /b 1
+
+:QtDirOk
 
 if not exist "%SOURCE_DIR%\CMakeLists.txt" (
     echo [ERROR] CMakeLists.txt not found in "%SOURCE_DIR%"
